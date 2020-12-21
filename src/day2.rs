@@ -10,17 +10,7 @@ use regex::{Regex, Captures};
 
 pub fn day_two() -> Result<(), Error> {
 
-
-    // let (a, b) = include_str!("day2.txt")
-    //     .split('\n')
-    //     .map(str::parse::<i64>)
-    //     .collect::<Result<Vec<_>, _>>()?
-    //     .into_iter()
-
-
     let re = Regex::new(r"^(\d+)-(\d+)\s*(\w):\s(\w+)$").unwrap();
-
-
 
     // use `vec` for whatever
     let br = BufReader::new(File::open("day2.txt")?);
@@ -34,10 +24,16 @@ pub fn day_two() -> Result<(), Error> {
                     let max = (&cap[2]).parse::<usize>().unwrap();
                     let letter =&cap[3];
                     let text =&cap[4];
-                    let count = text.matches(letter).count();
-                    count >= min && count <= max
-                }
 
+                    // second
+                    let c1 = text.chars().nth(min-1).unwrap();
+                    let c2 = text.chars().nth(max-1).unwrap();
+                    (c1 == letter.chars().next().unwrap()) ^ (c2 == letter.chars().next().unwrap())
+
+                    // first problem
+                    // let count = text.matches(letter).count();
+                    //count >= min && count <= max
+                }
                 _ => {false}
             }
         }).count();
