@@ -5,6 +5,7 @@ name = "advent_1"
 version = "0.1.0"
 dependencies = [
  "itertools",
+ "lazy_static",
  "regex",
 ]
 
