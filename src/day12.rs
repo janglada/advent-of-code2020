@@ -1,42 +1,121 @@
-use std::fmt;
+use std::{fmt, ops};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 struct Vec2 {
     x: f64,
     y: f64,
-    rot: f64,
 }
 
 impl Vec2 {
-    fn manhattan_distance(self) -> i64 {
-        (self.x.abs() + self.y.abs()).round() as i64
+    fn norm(self) -> f64 {
+        (self.x * self.x + self.y * self.y).sqrt()
     }
 
-    fn applyCommand(&mut self, command: Command) {
+    fn unitary(self) -> Vec2 {
+        let norm = self.norm();
+        Vec2 {
+            x: self.x / norm,
+            y: self.y / norm,
+        }
+    }
+}
+
+struct Rotator {
+    beta: f64,
+}
+
+impl ops::Add<Vec2> for Vec2 {
+    type Output = Vec2;
+
+    fn add(self, _rhs: Vec2) -> Vec2 {
+        Vec2 {
+            x: self.x + _rhs.x,
+            y: self.y + _rhs.y,
+        }
+    }
+}
+
+impl ops::Mul<isize> for Vec2 {
+    type Output = Vec2;
+
+    fn mul(self, _rhs: isize) -> Vec2 {
+        Vec2 {
+            x: self.x * _rhs as f64,
+            y: self.y * _rhs as f64,
+        }
+    }
+}
+impl ops::Mul<f64> for Vec2 {
+    type Output = Vec2;
+
+    fn mul(self, _rhs: f64) -> Vec2 {
+        Vec2 {
+            x: self.x * _rhs,
+            y: self.y * _rhs,
+        }
+    }
+}
+
+impl ops::Mul<Rotator> for Vec2 {
+    type Output = Vec2;
+
+    fn mul(self, _rhs: Rotator) -> Vec2 {
+        let cos = _rhs.beta.to_radians().cos();
+        let sin = _rhs.beta.to_radians().sin();
+        Vec2 {
+            x: self.x * cos - sin * self.y,
+            y: self.x * sin + cos * self.y,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+struct ShipState {
+    pos: Vec2,
+    rot: f64,
+    waypoint: Vec2,
+}
+
+impl ShipState {
+    fn manhattan_distance(self) -> i64 {
+        (self.pos.x.abs() + self.pos.y.abs()).round() as i64
+    }
+
+    fn applyCommand(self, command: Command) -> ShipState {
+        let mut result = self.clone();
         match command.action {
             Action::North => {
-                self.y = self.y + command.amount;
+                result.waypoint = result.waypoint + Vec2 { x: 0., y: 1. } * command.amount;
             }
             Action::South => {
-                self.y = self.y - command.amount;
+                result.waypoint = result.waypoint + Vec2 { x: 0., y: -1. } * command.amount;
             }
             Action::East => {
-                self.x = self.x + command.amount;
+                result.waypoint = result.waypoint + Vec2 { x: 1., y: 0. } * command.amount;
             }
             Action::West => {
-                self.x = self.x - command.amount;
+                result.waypoint = result.waypoint + Vec2 { x: -1., y: 0. } * command.amount;
             }
             Action::Left => {
-                self.rot = self.rot + command.amount * std::f64::consts::PI / 180.;
+                result.waypoint = result.waypoint
+                    * Rotator {
+                        beta: command.amount,
+                    };
             }
             Action::Right => {
-                self.rot = self.rot - command.amount * std::f64::consts::PI / 180.;
+                result.waypoint = result.waypoint
+                    * Rotator {
+                        beta: -command.amount,
+                    };
             }
             Action::Forward => {
-                self.x = self.x + self.rot.cos() * command.amount;
-                self.y = self.y + self.rot.sin() * command.amount;
+                result.pos = result.pos + result.waypoint * command.amount;
+
+                // result.pos.x = self.pos.x + self.rot.cos() * command.amount;
+                // result.pos.y = self.pos.y + self.rot.sin() * command.amount;
             }
         }
+        result
     }
 }
 
@@ -85,20 +164,87 @@ fn read(txt: &str) -> Vec<Command> {
 }
 
 pub fn day_twelve() {
-    let mut intial_position = Vec2 {
-        x: 0.,
-        y: 0.,
+    let mut intial_position = ShipState {
+        pos: Vec2 { x: 0., y: 0. },
         rot: 0.,
+        waypoint: Vec2 { x: 10., y: 1. },
     };
     let commands = read(include_str!("../day12.txt"));
 
-    commands
+    let d = commands
         .into_iter()
-        .for_each(|command| intial_position.applyCommand(command));
+        .fold(intial_position, |p, command| p.applyCommand(command))
+        .manhattan_distance();
 
-    println!("{}", intial_position.manhattan_distance())
+    println!("{}", d)
 
     // commands.iter().filter_map(|x| x).for_each(|command| {
     //
     // } );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_0() {
+        let a = Vec2 { x: 1., y: 0. } + Vec2 { x: 0., y: 1. };
+        assert_eq!(a.x, 1.);
+        assert_eq!(a.y, 1.);
+        let b = Vec2 { x: 1., y: 1. } * 10;
+        assert_eq!(b.x, 10.);
+        assert_eq!(b.y, 10.);
+    }
+
+    #[test]
+    fn test_11() {
+        let a = Vec2 { x: 1., y: 0. };
+        assert_eq!(a * Rotator { beta: 90. }, Vec2 { x: 0., y: 1. });
+    }
+
+    #[test]
+    fn test_12() {
+        let mut intial_position = ShipState {
+            pos: Vec2 { x: 0., y: 0. },
+            rot: 0.,
+            waypoint: Vec2 { x: 10., y: 1. },
+        };
+
+        let mut state: ShipState = intial_position.applyCommand(Command {
+            action: Action::Forward,
+            amount: 10.,
+        });
+
+        assert_eq!(state.pos.x, 100.0);
+        assert_eq!(state.pos.y, 10.);
+
+        state = state.applyCommand(Command {
+            action: Action::North,
+            amount: 3.,
+        });
+        assert_eq!(state.pos.x, 100.0);
+        assert_eq!(state.pos.y, 10.);
+
+        state = state.applyCommand(Command {
+            action: Action::Forward,
+            amount: 7.,
+        });
+        assert_eq!(state.pos.x, 170.0);
+        assert_eq!(state.pos.y, 38.);
+
+        state = state.applyCommand(Command {
+            action: Action::Right,
+            amount: 90.,
+        });
+        assert_eq!(state.pos.x, 170.0);
+        assert_eq!(state.pos.y, 38.);
+
+        state = state.applyCommand(Command {
+            action: Action::Forward,
+            amount: 11.,
+        });
+        assert_eq!(state.pos.x, 214.0);
+        assert_eq!(state.pos.y, -72.);
+    }
 }
