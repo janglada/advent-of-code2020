@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ops::BitAnd;
 use std::str::FromStr;
-
 lazy_static! {
     static ref mask_regex: Regex = Regex::new(r"(?m)mask\s*=\s*([0X1]{36})").unwrap();
     static ref mem_regex: Regex = Regex::new(r"(?m)mem\[(\d+)\]\s=\s(\d+)").unwrap();
@@ -16,23 +15,11 @@ enum BitMaskBit {
     One,
     Zero,
 }
-//
-// impl BitAnd<i8> for BitMaskBit {
-//     type Output = i8;
-//
-//     // rhs is the "right-hand side" of the expression `a & b`
-//     fn bitand(self, rhs: i8) -> i8 {
-//         match self {
-//             BitMaskBit::X => rhs,
-//             BitMaskBit::One => 1 as i8,
-//             BitMaskBit::Zero => 0 as i8,
-//         }
-//     }
-// }
 
 struct BitMask {
     mask: [BitMaskBit; 36],
     mask_str: String,
+    other_addresses: Vec<String>,
 }
 
 impl BitMask {
@@ -59,10 +46,69 @@ impl BitMask {
                 panic!("Expected a Vec of length {} but it was {}", 36, v.len())
             }),
             mask_str: mask_str.parse().unwrap(),
+            other_addresses: Vec::new(),
         }
     }
 
-    fn maskAddress(&self, mem: MemoryAddress) -> MemoryAddress {
+    fn maskAddress(&self, mem: MemoryAddress) {
+        let s = format!("{:036b}", mem.address);
+
+        let mut addr: String = s
+            .chars()
+            .zip(self.mask_str.chars())
+            .map(|(bit, mask)| match mask {
+                '0' => bit,
+                '1' => '1',
+                'X' => 'X',
+                _ => {
+                    panic!("found {}", bit)
+                }
+            })
+            .collect();
+
+        let addresses: Vec<String> = addr
+            .chars()
+            .enumerate()
+            .filter_map(|(idx, char)| if char == 'X' { Some(idx) } else { None })
+            .for_each(|idx| {})
+            .map(|idx| {
+                vec![
+                    addr.chars()
+                        .enumerate()
+                        .map(|(i, c)| if i == idx { '0' } else { c })
+                        .collect(),
+                    addr.chars()
+                        .enumerate()
+                        .map(|(i, c)| if i == idx { '1' } else { c })
+                        .collect(),
+                ]
+            })
+            .flatten()
+            .collect();
+
+        let addresses: Vec<String> = addr
+            .chars()
+            .enumerate()
+            .filter_map(|(idx, char)| if char == 'X' { Some(idx) } else { None })
+            .map(|idx| {
+                vec![
+                    addr.chars()
+                        .enumerate()
+                        .map(|(i, c)| if i == idx { '0' } else { c })
+                        .collect(),
+                    addr.chars()
+                        .enumerate()
+                        .map(|(i, c)| if i == idx { '1' } else { c })
+                        .collect(),
+                ]
+            })
+            .flatten()
+            .collect();
+
+        println!("{:?}", addresses);
+    }
+
+    fn maskMemoryValue(&self, mem: MemoryAddress) -> MemoryAddress {
         let set_zeros = u64::from_str_radix(
             self.mask_str
                 .chars()
@@ -98,7 +144,7 @@ impl BitMask {
 
         MemoryAddress {
             address: mem.address,
-            value: (mem.value & set_zeros) | set_ones,
+            value: mem.value,
         }
     }
 }
@@ -122,17 +168,6 @@ impl MemoryAddress {
         }
     }
 }
-// impl BitMask {
-//     fn mask(n: i64) -> i64 {}
-// }
-// impl BitAnd<i64> for BitMask {
-//     type Output = i64;
-//
-//     // rhs is the "right-hand side" of the expression `a & b`
-//     fn bitand(self, rhs: i64) -> i64 {
-//         Self(self.0 & rhs.0)
-//     }
-// }
 
 pub fn day_fourteen() {
     let mut computer_mem = HashMap::new();
@@ -155,7 +190,7 @@ pub fn day_fourteen() {
             .map(|mem_str| MemoryAddress::fromString(mem_str))
             .for_each(|mem: MemoryAddress| {
                 let prev = mem.value;
-                let newAddress = mask.maskAddress(mem);
+                let newAddress = mask.maskMemoryValue(mem);
 
                 computer_mem.insert(newAddress.address, newAddress.value);
 
@@ -177,11 +212,23 @@ mod tests {
     #[test]
     fn test_0() {
         let mask = BitMask::fromString("mask = XXXXXXXXXXXXXXXXXXXXXXXXXXXXX1XXXX0X");
-        let new_addr = mask.maskAddress(MemoryAddress::fromString("mem[41476] = 11"));
+        let new_addr = mask.maskMemoryValue(MemoryAddress::fromString("mem[41476] = 11"));
         assert_eq!(new_addr.value, 73);
-        let new_addr = mask.maskAddress(MemoryAddress::fromString("mem[41476] = 101"));
+        let new_addr = mask.maskMemoryValue(MemoryAddress::fromString("mem[41476] = 101"));
         assert_eq!(new_addr.value, 101);
-        let new_addr = mask.maskAddress(MemoryAddress::fromString("mem[41476] = 0"));
+        let new_addr = mask.maskMemoryValue(MemoryAddress::fromString("mem[41476] = 0"));
         assert_eq!(new_addr.value, 64);
+    }
+
+    #[test]
+    fn test_1() {
+        let s = format!("{:b}", 1236);
+        println!("{}", s);
+    }
+
+    #[test]
+    fn test_2() {
+        let mask = BitMask::fromString("mask = 000000000000000000000000000000X1001X");
+        mask.maskAddress(MemoryAddress::fromString("mem[42] = 100"));
     }
 }
