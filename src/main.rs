@@ -1,5 +1,6 @@
 #![feature(array_map)]
-
+#[macro_use]
+extern crate itertools;
 // mod day1;
 // mod day2;
 // mod day3;
@@ -13,7 +14,8 @@
 // mod day13;
 // mod day14;
 // mod day15;
-mod day16;
+// mod day16;
+mod day17;
 // mod day9;
 
 fn main() {
@@ -31,5 +33,6 @@ fn main() {
     // day12::day_twelve();
     // day14::day_fourteen();
     // day15::day_fifteen();
-    day16::day_sixteen();
+    // day16::day_sixteen();
+    day17::day_seventeen()
 }
