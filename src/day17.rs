@@ -3,7 +3,7 @@ use itertools::Itertools;
 
 use std::collections::HashMap;
 
-type Coordinates = (isize, isize, isize);
+type Coordinates = (isize, isize, isize, isize);
 
 #[derive(Clone, Copy, PartialEq)]
 enum CubeState {
@@ -22,9 +22,10 @@ fn neighbour_positions(coord: Coordinates) -> impl Iterator<Item = Coordinates> 
     let cx = coord.0;
     let cy = coord.1;
     let cz = coord.2;
-    iproduct!(-1..=1, -1..=1, -1..=1)
-        .filter(|&x| !(x.0 == 0 && x.1 == 0 && x.2 == 0))
-        .map(move |(x, y, z)| (cx + x, cy + y, cz + z))
+    let cw = coord.3;
+    iproduct!(-1..=1, -1..=1, -1..=1, -1..=1)
+        .filter(|&x| !(x.0 == 0 && x.1 == 0 && x.2 == 0 && x.3 == 0))
+        .map(move |(x, y, z, w)| (cx + x, cy + y, cz + z, cw + w))
 }
 
 fn read(txt: &str) -> Space {
@@ -40,9 +41,9 @@ fn read(txt: &str) -> Space {
                 _ => CubeState::Inactive,
             };
             let cloned = initial_state.clone();
-            let position = (i as isize, j as isize, 0);
+            let position = (i as isize, j as isize, 0, 0);
             space.insert(
-                (i as isize, j as isize, 0),
+                (i as isize, j as isize, 0, 0),
                 Cube {
                     state: initial_state,
                     prev_state: cloned,
@@ -75,7 +76,7 @@ fn read(txt: &str) -> Space {
 pub(crate) fn day_seventeen() {
     let mut space = read(include_str!("../day17.txt"));
 
-    iproduct!(-20..=20, -20..=20, -20..=20).for_each(|p| match space.get(&p) {
+    iproduct!(-20..=20, -20..=20, -20..=20, -20..=20).for_each(|p| match space.get(&p) {
         None => {
             space.insert(
                 p,
