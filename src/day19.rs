@@ -1,7 +1,23 @@
 extern crate peg;
 
-use itertools::Itertools;
+use itertools::__std_iter::Peekable;
+use itertools::{Itertools, MultiPeek};
 use std::collections::HashMap;
+use std::slice::Iter;
+use std::str::Chars;
+
+struct Multizip<T>(Vec<T>);
+
+impl<T> Iterator for Multizip<T>
+where
+    T: Iterator,
+{
+    type Item = Vec<T::Item>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.iter_mut().map(Iterator::next).collect()
+    }
+}
 
 #[derive(Debug)]
 pub enum MsgRule {
@@ -10,12 +26,13 @@ pub enum MsgRule {
 }
 
 struct CompiledRule {
-    rule: Vec<String>,
+    rule: Vec<Vec<char>>,
 }
 
 impl CompiledRule {
     pub fn validate(&self, s: String) -> bool {
-        self.rule.iter().any(|rule_str| rule_str.to_string() == s)
+        false
+        // self.rule.iter().any(|rule_str| rule_str.to_string() == s)
     }
 }
 
@@ -37,19 +54,62 @@ impl Rules {
         rules_compiler
     }
 
-    pub fn compile_rule(&self, id: &usize) -> CompiledRule {
-        CompiledRule {
-            rule: self.parse_rule(id),
-        }
+    // pub fn compile(&self, id: &usize) -> CompiledRule {
+    //     CompiledRule {
+    //         rule: self.compile_rule(id),
+    //     }
+    // }
+    // pub fn compile_rule(&self, id: &usize) -> Vec<Vec<char>> {
+    //     let mut v: Vec<char> = Vec::new();
+    //     match self.rule_dict.get(id).unwrap() {
+    //         MsgRule::Compound(_) => {}
+    //         MsgRule::Symbol(c) => {
+    //             v.push(*c);
+    //         }
+    //     }
+    //     v
+    // }
+    // pub fn validate(&self, id: &usize, s: String) -> bool {
+    //     let mut char_iter = s.chars();
+    //     match self.rule_dict.get(id).unwrap() {
+    //         MsgRule::Compound(comp) => comp
+    //             .iter()
+    //             .map(|v| v.iter().map(|ci| self.parse_rule(ci).join("").to_string()))
+    //             .collect(),
+    //         MsgRule::Symbol(c) => char_iter.next().unwrap() == 'c',
+    //     }
+    // }
+
+    pub fn is_valid(&self, id: &usize, s: &str) -> bool {
+        // println!("{}", s);
+        self.validate_rule(self.rule_dict.get(id).unwrap(), &mut s.chars().peekable())
     }
 
-    pub fn parse_rule(&self, id: &usize) -> Vec<String> {
-        match self.rule_dict.get(id).unwrap() {
-            MsgRule::Compound(comp) => comp
-                .iter()
-                .map(|v| v.iter().flat_map(|ci| self.parse_rule(ci)).join(""))
-                .collect(),
-            MsgRule::Symbol(c) => vec![c.to_string()],
+    pub fn validate_rule(&self, rule: &MsgRule, char_iter: &mut Peekable<Chars<'_>>) -> bool {
+        match rule {
+            MsgRule::Compound(comp) => Multizip(comp.iter().map(|v| v.iter()).collect()).all(|x| {
+                x.iter().any(|r| {
+                    println!("checking rule to {}", r);
+                    self.validate_rule(self.rule_dict.get(r).unwrap(), char_iter)
+                })
+            }),
+            MsgRule::Symbol(c) => {
+                let next_char = char_iter.peek();
+
+                match next_char {
+                    None => false,
+                    Some(a) => {
+                        println!("  next_char {}, rule   must match  {}", *a, *c);
+                        if *c == *a {
+                            char_iter.next();
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                }
+                // println!("  {} matches {} {}", next_char, c, next_char == c);
+            }
         }
     }
 }
@@ -93,7 +153,15 @@ peg::parser! {
 
 pub fn day_nineteen() {
     let mut iter = include_str!("../day19.txt").split("\n\n");
-    let mut rules_compiler = Rules::new(iter.next().unwrap());
+    let mut rules = Rules::new(iter.next().unwrap());
+    let n = iter
+        .next()
+        .unwrap()
+        .split("\n")
+        .filter(|s| rules.is_valid(&0, s))
+        .count();
+
+    println!("{}", n);
 }
 
 #[cfg(test)]
@@ -181,14 +249,29 @@ mod tests {
     fn test_simple_validation() {
         let rules = Rules::new("18: 48 48\n48: \"b\"");
 
-        let vec = rules.parse_rule(&18);
-
-        println!("{:?}", vec);
-        assert_eq!("bb", vec.get(0).unwrap());
+        assert_eq!(true, rules.is_valid(&18, "bb"));
+        assert_eq!(false, rules.is_valid(&18, "ab"));
     }
 
     #[test]
-    fn test_complex_validation() {
+    fn test_complex_validation1() {
+        let rules = Rules::new(
+            r#"0: 1 2
+1: "a"
+2: 1 3 | 3 1
+3: "b""#,
+        );
+
+        // assert_eq!(true, rules.is_valid(&0, "aab"));
+        // assert_eq!(true, rules.is_valid(&0, "aba"));
+        // assert_eq!(false, rules.is_valid(&0, "aaa"));
+        // assert_eq!(false, rules.is_valid(&0, "bba"));
+        assert_eq!(false, rules.is_valid(&0, "abb"));
+        // assert_eq!(false, rules.is_valid(&0, "baa"));
+    }
+
+    #[test]
+    fn test_complex_validation2() {
         let rules = Rules::new(
             r#"0: 4 1 5
 1: 2 3 | 3 2
@@ -198,16 +281,10 @@ mod tests {
 5: "b""#,
         );
 
-        let compiled = rules.compile_rule(&0);
-        println!("{:?}", compiled.rule);
-
-        assert_eq!(true, compiled.validate("aaaabb".to_string()));
-        assert_eq!(true, compiled.validate("aaabab".to_string()));
-        assert_eq!(true, compiled.validate("abbabb".to_string()));
-        assert_eq!(true, compiled.validate("abbbab".to_string()));
-        assert_eq!(true, compiled.validate("aabaab".to_string()));
-        assert_eq!(true, compiled.validate("aabbbb".to_string()));
-        assert_eq!(true, compiled.validate("abaaab".to_string()));
-        assert_eq!(true, compiled.validate("ababbb".to_string()));
+        assert_eq!(true, rules.is_valid(&0, "ababbb"));
+        assert_eq!(true, rules.is_valid(&0, "abbbab"));
+        assert_eq!(false, rules.is_valid(&0, "bababa"));
+        assert_eq!(false, rules.is_valid(&0, "aaabbb"));
+        assert_eq!(false, rules.is_valid(&0, "aaaabbb"));
     }
 }
