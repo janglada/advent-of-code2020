@@ -25,14 +25,64 @@ pub enum MsgRule {
     Symbol(char),
 }
 
-struct CompiledRule {
-    rule: Vec<Vec<char>>,
+struct StringCursor<'a> {
+    str: &'a str,
+    index: i32,
+    peek_index: i32,
 }
 
-impl CompiledRule {
-    pub fn validate(&self, s: String) -> bool {
-        false
-        // self.rule.iter().any(|rule_str| rule_str.to_string() == s)
+impl StringCursor<'_> {
+    fn new(str: &str) -> StringCursor {
+        StringCursor {
+            index: -1,
+            peek_index: -1,
+            str,
+        }
+    }
+
+    fn peek(&mut self) -> Option<char> {
+        self.value_at(self.index + 1)
+    }
+
+    fn next(&mut self) -> Option<char> {
+        self.index += 1;
+        self.value_at(self.index)
+    }
+    fn prev(&mut self) -> Option<char> {
+        self.index -= 1;
+        self.value_at(self.index)
+    }
+    fn current(&mut self) -> Option<char> {
+        self.value_at(self.index)
+    }
+
+    fn value_at(&self, index: i32) -> Option<char> {
+        let len = self.str.len() as i32;
+        // println!("str len {}, index {}", len);
+        if index >= 0 && len > index {
+            Some(self.str.as_bytes()[index as usize] as char)
+        } else {
+            None
+        }
+    }
+
+    fn reset(&mut self) {
+        self.peek_index = self.index;
+    }
+
+    //
+    //
+    fn advance(&mut self) {
+        self.index = self.peek_index;
+    }
+
+    fn set_index(&mut self, index: i32) {
+        self.index = index;
+    }
+
+    fn all_chars_validated(&self) -> bool {
+        println!("ALL {} {}", self.index, (self.str.len() as i32));
+        self.index == (self.str.len() as i32 - 1)
     }
 }
 
@@ -54,56 +104,50 @@ impl Rules {
         rules_compiler
     }
 
-    // pub fn compile(&self, id: &usize) -> CompiledRule {
-    //     CompiledRule {
-    //         rule: self.compile_rule(id),
-    //     }
-    // }
-    // pub fn compile_rule(&self, id: &usize) -> Vec<Vec<char>> {
-    //     let mut v: Vec<char> = Vec::new();
-    //     match self.rule_dict.get(id).unwrap() {
-    //         MsgRule::Compound(_) => {}
-    //         MsgRule::Symbol(c) => {
-    //             v.push(*c);
-    //         }
-    //     }
-    //     v
-    // }
-    // pub fn validate(&self, id: &usize, s: String) -> bool {
-    //     let mut char_iter = s.chars();
-    //     match self.rule_dict.get(id).unwrap() {
-    //         MsgRule::Compound(comp) => comp
-    //             .iter()
-    //             .map(|v| v.iter().map(|ci| self.parse_rule(ci).join("").to_string()))
-    //             .collect(),
-    //         MsgRule::Symbol(c) => char_iter.next().unwrap() == 'c',
-    //     }
-    // }
-
     pub fn is_valid(&self, id: &usize, s: &str) -> bool {
         // println!("{}", s);
-        self.validate_rule(self.rule_dict.get(id).unwrap(), &mut s.chars().peekable())
+        let string_cursor = &mut StringCursor::new(s);
+        self.validate_rule(self.rule_dict.get(id).unwrap(), string_cursor)
+            && string_cursor.all_chars_validated()
     }
 
-    pub fn validate_rule(&self, rule: &MsgRule, char_iter: &mut Peekable<Chars<'_>>) -> bool {
+    pub fn validate_rule(&self, rule: &MsgRule, char_iter: &mut StringCursor) -> bool {
         match rule {
-            MsgRule::Compound(comp) => Multizip(comp.iter().map(|v| v.iter()).collect()).all(|x| {
-                x.iter().any(|r| {
-                    println!("checking rule to {}", r);
-                    self.validate_rule(self.rule_dict.get(r).unwrap(), char_iter)
-                })
+            MsgRule::Compound(comp) => comp.iter().any(|r| {
+                let index = char_iter.index;
+                let is_valid = r
+                    .iter()
+                    .all(|x| self.validate_rule(self.rule_dict.get(x).unwrap(), char_iter));
+
+                println!(
+                    "IS VALID {:?} {} {}",
+                    r,
+                    is_valid,
+                    char_iter.value_at(char_iter.peek_index).unwrap_or('-')
+                );
+
+                if !is_valid {
+                    char_iter.set_index(index)
+                }
+
+                is_valid
             }),
+
             MsgRule::Symbol(c) => {
                 let next_char = char_iter.peek();
 
                 match next_char {
-                    None => false,
+                    None => {
+                        println!("NO MORE CHARS");
+                        panic!()
+                    }
                     Some(a) => {
-                        println!("  next_char {}, rule   must match  {}", *a, *c);
-                        if *c == *a {
+                        println!("  next_char {}, rule   must match  {} {}", a, *c, *c == a);
+                        if *c == a {
                             char_iter.next();
                             true
                         } else {
+                            char_iter.prev();
                             false
                         }
                     }
@@ -153,11 +197,11 @@ peg::parser! {
 
 pub fn day_nineteen() {
     let mut iter = include_str!("../day19.txt").split("\n\n");
-    let mut rules = Rules::new(iter.next().unwrap());
+    let rules = Rules::new(iter.next().unwrap());
     let n = iter
         .next()
         .unwrap()
-        .split("\n")
+        .split('\n')
         .filter(|s| rules.is_valid(&0, s))
         .count();
 
@@ -251,6 +295,7 @@ mod tests {
 
         assert_eq!(true, rules.is_valid(&18, "bb"));
         assert_eq!(false, rules.is_valid(&18, "ab"));
+        assert_eq!(false, rules.is_valid(&18, "bba"));
     }
 
     #[test]
@@ -262,12 +307,24 @@ mod tests {
 3: "b""#,
         );
 
-        // assert_eq!(true, rules.is_valid(&0, "aab"));
-        // assert_eq!(true, rules.is_valid(&0, "aba"));
-        // assert_eq!(false, rules.is_valid(&0, "aaa"));
-        // assert_eq!(false, rules.is_valid(&0, "bba"));
+        assert_eq!(true, rules.is_valid(&0, "aab"));
+        assert_eq!(true, rules.is_valid(&0, "aba"));
+        assert_eq!(false, rules.is_valid(&0, "aaa"));
+        assert_eq!(false, rules.is_valid(&0, "bba"));
         assert_eq!(false, rules.is_valid(&0, "abb"));
-        // assert_eq!(false, rules.is_valid(&0, "baa"));
+        assert_eq!(false, rules.is_valid(&0, "baa"));
+    }
+
+    #[test]
+    fn test_complex_validation1_1() {
+        let rules = Rules::new(
+            r#"0: 1 2
+1: "a"
+2: 1 3 | 3 1
+3: "b""#,
+        );
+
+        assert_eq!(false, rules.is_valid(&0, "aca"));
     }
 
     #[test]
@@ -283,6 +340,9 @@ mod tests {
 
         assert_eq!(true, rules.is_valid(&0, "ababbb"));
         assert_eq!(true, rules.is_valid(&0, "abbbab"));
+        assert_eq!(false, rules.is_valid(&0, "abbb"));
+        assert_eq!(false, rules.is_valid(&0, "abbbaba"));
+        assert_eq!(false, rules.is_valid(&0, "abbbabb"));
         assert_eq!(false, rules.is_valid(&0, "bababa"));
         assert_eq!(false, rules.is_valid(&0, "aaabbb"));
         assert_eq!(false, rules.is_valid(&0, "aaaabbb"));
