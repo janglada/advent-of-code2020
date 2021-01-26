@@ -81,8 +81,9 @@ impl StringCursor<'_> {
     }
 
     fn all_chars_validated(&self) -> bool {
-        println!("ALL {} {}", self.index, (self.str.len() as i32));
-        self.index == (self.str.len() as i32 - 1)
+        // println!("ALL {} {}", self.index, (self.str.len() as i32));
+        self.index == (self.str.len() as i32 - 1);
+        true
     }
 }
 
@@ -118,13 +119,13 @@ impl Rules {
                 let is_valid = r
                     .iter()
                     .all(|x| self.validate_rule(self.rule_dict.get(x).unwrap(), char_iter));
-
-                println!(
-                    "IS VALID {:?} {} {}",
-                    r,
-                    is_valid,
-                    char_iter.value_at(char_iter.peek_index).unwrap_or('-')
-                );
+                //
+                // println!(
+                //     "IS VALID {:?} {} {}",
+                //     r,
+                //     is_valid,
+                //     char_iter.value_at(char_iter.peek_index).unwrap_or('-')
+                // );
 
                 if !is_valid {
                     char_iter.set_index(index)
@@ -138,11 +139,12 @@ impl Rules {
 
                 match next_char {
                     None => {
-                        println!("NO MORE CHARS");
-                        panic!()
+                        // println!("NO MORE CHARS");
+                        // panic!()
+                        false
                     }
                     Some(a) => {
-                        println!("  next_char {}, rule   must match  {} {}", a, *c, *c == a);
+                        // println!("  next_char {}, rule   must match  {} {}", a, *c, *c == a);
                         if *c == a {
                             char_iter.next();
                             true
@@ -197,14 +199,20 @@ peg::parser! {
 
 pub fn day_nineteen() {
     let mut iter = include_str!("../day19.txt").split("\n\n");
-    let rules = Rules::new(iter.next().unwrap());
+    let mut rules = Rules::new(iter.next().unwrap());
+
+    let r_8 = rules_parser::line("8: 42 | 42 8").ok().unwrap();
+    let r_11 = rules_parser::line("11: 42 31 | 42 11 31").ok().unwrap();
+
+    rules.rule_dict.insert(r_8.0, r_8.1);
+    rules.rule_dict.insert(r_11.0, r_11.1);
+
     let n = iter
         .next()
         .unwrap()
         .split('\n')
         .filter(|s| rules.is_valid(&0, s))
         .count();
-
     println!("{}", n);
 }
 
