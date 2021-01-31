@@ -157,11 +157,6 @@ pub fn day_twenty() {
         .map(|(&key, &v)| key)
         .product();
     println!("{}", s)
-    //
-    // let mut reader = Reader::new(Cursor::new(t.data))
-    //     .with_guessed_format()
-    //     .expect("Cursor io never fails");
-    // assert_eq!(reader.format(), Some(ImageFormat::Pnm));
 }
 
 #[cfg(test)]

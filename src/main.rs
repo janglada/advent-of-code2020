@@ -18,7 +18,8 @@ extern crate itertools;
 // mod day17;
 // mod day18;
 // mod day19;
-mod day20;
+// mod day20;
+mod day21;
 // mod day9;
 
 fn main() {
@@ -40,5 +41,6 @@ fn main() {
     // day17::day_seventeen()
     // day18::day_eighteen();
     // day19::day_nineteen();
-    day20::day_twenty();
+    // day20::day_twenty();
+    day21::run();
 }
