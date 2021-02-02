@@ -1,11 +1,7 @@
-extern crate multimap;
 extern crate peg;
 
-use itertools::__std_iter::Filter;
-use multimap::MultiMap;
-use std::collections::HashMap;
-use std::fmt;
-use std::slice::Iter;
+use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
 
 peg::parser! {
   grammar food_list_parser() for str
@@ -67,30 +63,41 @@ pub fn run() {
     let mut allergen_per_ingredient: HashMap<String, HashMap<String, u32>> = HashMap::new();
     let mut ingredient_per_allergen: HashMap<String, HashMap<String, u32>> = HashMap::new();
 
-    // include_str!("../day21_test.txt")
-    include_str!("../day21.txt")
+    let mut allergen_count: HashMap<String, u32> = HashMap::new();
+
+    let recipes: Vec<Line> = include_str!("../day21.txt")
+        // include_str!("../day21.txt")
         .split("\n")
         .map(|l| food_list_parser::line(l).ok().unwrap())
-        .for_each(|l: Line| {
-            l.food.iter().for_each(|food| {
-                l.allergen.iter().for_each(|allergen| {
-                    if allergen_per_ingredient.contains_key(allergen) {
-                        let option = allergen_per_ingredient.get_mut(allergen).unwrap();
+        .collect();
 
-                        *option.entry(food.clone()).or_insert(0) += 1;
-                    } else {
-                        allergen_per_ingredient.insert(allergen.clone(), HashMap::new());
-                    }
+    recipes.iter().for_each(|l| {
+        l.food.iter().for_each(|food| {
+            l.allergen.iter().for_each(|allergen| {
+                if allergen_per_ingredient.contains_key(allergen) {
+                    let option = allergen_per_ingredient.get_mut(allergen).unwrap();
 
-                    if ingredient_per_allergen.contains_key(food) {
-                        let option = ingredient_per_allergen.get_mut(food).unwrap();
-                        *option.entry(allergen.clone()).or_insert(0) += 1;
-                    } else {
-                        ingredient_per_allergen.insert(food.clone(), HashMap::new());
-                    }
-                })
-            });
+                    *option.entry(food.clone()).or_insert(0) += 1;
+                } else {
+                    let mut map = HashMap::new();
+                    map.insert(food.clone(), 1);
+                    allergen_per_ingredient.insert(allergen.clone(), map);
+                }
+
+                if ingredient_per_allergen.contains_key(food) {
+                    let option = ingredient_per_allergen.get_mut(food).unwrap();
+                    *option.entry(allergen.clone()).or_insert(0) += 1;
+                } else {
+                    let mut map = HashMap::new();
+                    map.insert(allergen.clone(), 1);
+                    ingredient_per_allergen.insert(food.clone(), map);
+                }
+            })
         });
+        l.allergen.iter().for_each(|allergen| {
+            *allergen_count.entry(allergen.clone()).or_insert(0) += 1;
+        })
+    });
 
     ingredient_per_allergen
         .iter()
@@ -101,6 +108,95 @@ pub fn run() {
         .iter()
         // .filter(|(k, v)| v.len() == 1)
         .for_each(|(k, v)| println!("({} : {:?})", k, v));
+    println!("---------------------------");
+    println!("{:?} ", allergen_count);
+    // let ingredients: Vec<String> = ingredient_per_allergen
+    //     .iter()
+    //     .filter_map(|(k, v)| {
+    //         if v.values().into_iter().all(|n| *n == 1) {
+    //             Some(k.clone())
+    //         } else {
+    //             None
+    //         }
+    //     })
+    //     //  .map(|(&k, &v)| k)
+    //     .collect();
+
+    let mut set: HashSet<String> = HashSet::new();
+    ingredient_per_allergen.keys().for_each(|k| {
+        set.insert(k.clone());
+    });
+
+    let mut removed: HashSet<&String> = HashSet::new();
+    //let mut s = 1;
+    // while removed.len() != s {
+    //     s = removed.len();
+    //     println!("xxxx");
+    //     allergen_per_ingredient
+    //         .iter()
+    //         .for_each(|(allergen, foods)| {
+    //             let max = foods
+    //                 .iter()
+    //                 .filter(|(f, _)| !removed.contains(f))
+    //                 .sorted_by(|(k1, v1), (k2, v2)| Ord::cmp(&v2, &v1))
+    //                 .next()
+    //                 .unwrap();
+    //
+    //             let x: Vec<(&String, &u32)> = foods.iter().filter(|(k, &v)| v == *max.1).collect();
+    //             if x.len() == 1 {
+    //                 set.remove(x.get(0).unwrap().0);
+    //                 removed.insert(x.get(0).unwrap().0);
+    //             }
+    //         });
+    // }
+
+    // let mut deleted = allergen_per_ingredient
+    //     .iter_mut()
+    //     .for_each(|(allergen, foods)| {
+    //         foods.iter_mut().for_each(|(food, count)| {
+    //             match ingredient_per_allergen.get(food).unwrap().get(allergen) {
+    //                 None => {
+    //                     println!("{} does not contain allergen(I) {}", food, allergen);
+    //                 }
+    //                 Some(c) => {
+    //                     if c > count {
+    //                         set.remove(food);
+    //                         println!("{} does  contain allergen(II) {}", food, allergen);
+    //                     }
+    //                 }
+    //             }
+    //         })
+    //     });
+
+    ingredient_per_allergen
+        .iter()
+        .filter(|(k, a)| {
+            a.iter()
+                .any(|(a1, v1)| v1 == allergen_count.get(a1).unwrap())
+        })
+        .for_each(|(k, a)| {
+            set.remove(k);
+        });
+
+    println!("---------------------------");
+    println!("REMAINING FOODS {:?}", set);
+
+    let num: usize = recipes
+        .iter()
+        .map(|l| l.food.iter().filter(|&f| set.contains(f)).count())
+        .sum();
+    // let num: u32 = set
+    //     .iter()
+    //     .map(|f| {
+    //         ingredient_per_allergen
+    //             .get(f)
+    //             .unwrap()
+    //             .values()
+    //             .sum::<u32>()
+    //     })
+    //     .sum();
+
+    println!("{}", num);
 }
 #[cfg(test)]
 mod tests {
