@@ -1,11 +1,13 @@
 use itertools::Itertools;
+use std::cmp;
 use std::ops::Index;
 use std::thread::current;
 
 struct Game {
-    current: u8,
-    cups: Vec<u8>,
-    substracted_cups: Option<[u8; 3]>,
+    current: i8,
+    cups: Vec<i8>,
+    substracted_cups: Option<[i8; 3]>,
+    destination: Option<i8>,
 }
 
 struct IterCups<'a, T: 'a> {
@@ -28,7 +30,7 @@ impl<'a, T> Iterator for IterCups<'a, T> {
 }
 
 impl Game {
-    fn iter<'a>(&'a self) -> IterCups<'a, u8> {
+    fn iter<'a>(&'a self) -> IterCups<'a, i8> {
         IterCups {
             inner: &self.cups,
             pos: 0,
@@ -36,10 +38,14 @@ impl Game {
     }
 
     fn play(&mut self) {
+        println!();
+        println!("--------------------------------------");
+        println!("cups {:?}", self.cups);
         println!("current {}", self.current);
         let mut substracted = self.substract();
 
         let dst = self.find_destination(self.current - 1, substracted.clone());
+        self.destination = Some(dst);
 
         self.insert_substracted(dst, substracted.as_ref());
 
@@ -63,17 +69,24 @@ impl Game {
         println!("destination: {}", dst);
     }
 
-    fn find_destination(&mut self, dst: u8, substracted: Vec<u8>) -> u8 {
+    fn find_destination(&mut self, dst: i8, substracted: Vec<i8>) -> i8 {
         if substracted.contains(&dst) {
             self.find_destination(dst - 1, substracted)
         } else if !self.cups.contains(&dst) {
-            *(self.cups.iter().max().unwrap())
+            let m = cmp::max(
+                *(self.cups.iter().max().unwrap()),
+                *substracted.iter().max().unwrap(),
+            );
+
+            println!("DST  {}  max {}", dst, m);
+
+            self.find_destination(m, substracted)
         } else {
             dst
         }
     }
 
-    fn insert_substracted(&mut self, dst: u8, substracted: &[u8]) {
+    fn insert_substracted(&mut self, dst: i8, substracted: &[i8]) {
         let start_pos = self.cups.iter().find_position(|&&v| v == dst).unwrap().0;
         // println!("cups {:?}", self.cups);
         // println!("START POS {} (dst {})", start_pos, dst);
@@ -104,7 +117,7 @@ impl Game {
         str
     }
 
-    fn substract(&mut self) -> Vec<u8> {
+    fn substract(&mut self) -> Vec<i8> {
         //     println!(" before CUPS {:?}", self.cups);
         //
         let to_substract = self
@@ -145,13 +158,16 @@ impl Game {
 }
 
 pub fn run() {
+    // 87534692
+
     let mut game = Game {
         current: 1,
         cups: "469217538"
             .chars()
-            .map(|c| c.to_digit(10).unwrap() as u8)
-            .collect::<Vec<u8>>(),
+            .map(|c| c.to_digit(10).unwrap() as i8)
+            .collect::<Vec<i8>>(),
         substracted_cups: None,
+        destination: None,
     };
 
     let s = game.full_solution(100);
@@ -160,6 +176,7 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use itertools::assert_equal;
 
     #[test]
     fn test_iter() {
@@ -167,9 +184,10 @@ mod tests {
             current: 3,
             cups: "469217538"
                 .chars()
-                .map(|c| c.to_digit(10).unwrap() as u8)
-                .collect::<Vec<u8>>(),
+                .map(|c| c.to_digit(10).unwrap() as i8)
+                .collect::<Vec<i8>>(),
             substracted_cups: None,
+            destination: None,
         };
 
         game.iter().take(100).for_each(|x| {
@@ -183,14 +201,32 @@ mod tests {
             current: 3,
             cups: "389125467"
                 .chars()
-                .map(|c| c.to_digit(10).unwrap() as u8)
-                .collect::<Vec<u8>>(),
+                .map(|c| c.to_digit(10).unwrap() as i8)
+                .collect::<Vec<i8>>(),
             substracted_cups: None,
+            destination: None,
         };
 
         assert_eq!("92658374", game.full_solution(10));
         println!("{:?}", game.cups);
-        ssert_eq!("67384529", game.full_solution(90));
+        assert_eq!("67384529", game.full_solution(90));
+    }
+
+    fn are_equal(v1: Vec<i8>, v2: Vec<i8>) -> bool {
+        let first = v1.get(0).unwrap();
+        let len = v1.len();
+
+        let pos = v2.iter().find_position(|&x| x == first).unwrap().0;
+        let mut equals = true;
+        for (i, v) in v2.iter().cycle().skip(pos).take(len).enumerate() {
+            // println!("COMPARE {} {}", v, v1.get(i % len).unwrap());
+            if v != v1.get(i % len).unwrap() {
+                equals = false;
+                break;
+            }
+        }
+
+        equals
     }
 
     #[test]
@@ -199,17 +235,86 @@ mod tests {
             current: 3,
             cups: "389125467"
                 .chars()
-                .map(|c| c.to_digit(10).unwrap() as u8)
-                .collect::<Vec<u8>>(),
+                .map(|c| c.to_digit(10).unwrap() as i8)
+                .collect::<Vec<i8>>(),
             substracted_cups: None,
+            destination: None,
         };
-
-        game.play();
-
+        assert_eq!(3, game.current);
+        assert_eq!(
+            true,
+            are_equal(vec![3, 8, 9, 1, 2, 5, 4, 6, 7], game.cups.clone())
+        );
         assert_eq!("3  8  9  1  2  5  4  6  7", game.cups.iter().join("  "));
 
         game.play();
 
+        assert_eq!(2, game.destination.unwrap());
+        assert_eq!(2, game.current);
+        assert_eq!(
+            true,
+            are_equal(vec![3, 2, 8, 9, 1, 5, 4, 6, 7], game.cups.clone())
+        );
         assert_eq!("3  2  8  9  1  5  4  6  7", game.cups.iter().join("  "));
+
+        game.play();
+        assert_eq!(5, game.current);
+        assert_eq!(7, game.destination.unwrap());
+        assert_eq!(
+            true,
+            are_equal(vec![3, 2, 5, 4, 6, 7, 8, 9, 1], game.cups.clone())
+        );
+        assert_eq!("3  2  5  4  6  7  8  9  1", game.cups.iter().join("  "));
+
+        game.play();
+        assert_eq!(8, game.current);
+        assert_eq!(3, game.destination.unwrap());
+        assert_eq!(
+            true,
+            are_equal(vec![7, 2, 5, 8, 9, 1, 3, 4, 6], game.cups.clone())
+        );
+        // assert_eq!("7  2  5  8  9  1  3  4  6", game.cups.iter().join("  "));
+
+        game.play();
+        assert_eq!(7, game.destination.unwrap());
+        assert_eq!(
+            true,
+            are_equal(vec![3, 2, 5, 8, 4, 6, 7, 9, 1], game.cups.clone())
+        );
+        // assert_eq!("3  2  5  8  4  6  7  9  1", game.cups.iter().join("  "));
+    }
+
+    #[test]
+    fn test_equals() {
+        assert_eq!(
+            true,
+            are_equal(
+                vec![3, 8, 9, 1, 2, 5, 4, 6, 7],
+                vec![3, 8, 9, 1, 2, 5, 4, 6, 7]
+            )
+        );
+        assert_eq!(
+            true,
+            are_equal(
+                vec![3, 8, 9, 1, 2, 5, 4, 6, 7],
+                vec![8, 9, 1, 2, 5, 4, 6, 7, 3]
+            )
+        );
+
+        assert_eq!(
+            true,
+            are_equal(
+                vec![3, 8, 9, 1, 2, 5, 4, 6, 7],
+                vec![9, 1, 2, 5, 4, 6, 7, 3, 8]
+            )
+        );
+
+        assert_eq!(
+            false,
+            are_equal(
+                vec![3, 8, 1, 9, 2, 5, 4, 6, 7],
+                vec![9, 1, 2, 5, 4, 6, 7, 3, 8]
+            )
+        );
     }
 }
